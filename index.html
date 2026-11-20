@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cold Archive">
+<meta name="theme-color" content="#04060b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<title>Cyber Ops: Cold Archive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Share+Tech+Mono&family=Orbitron:wght@600;800&display=swap">
+<style>
+/* Two players, two looks. The agent screen is a tight, realistic twin-stick view;
+   the overwatch console is a full-map netrunner terminal with a bodycam inset. */
+:root {
+  color-scheme: dark;
+  --ink: #07090c;
+  --a-panel: rgba(16, 18, 20, 0.78);
+  --a-edge: rgba(210, 214, 206, 0.18);
+  --a-text: #e3e4dc;
+  --a-muted: #9a9d92;
+  --a-accent: #d6c27a;
+  --a-hp: #c9d3b4;
+  --a-bad: #e0664f;
+  --a-cloak: #8fc4d6;
+  --a-font: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --n-panel: rgba(5, 12, 22, 0.86);
+  --n-edge: rgba(0, 229, 255, 0.28);
+  --n-cyan: #00e5ff;
+  --n-mag: #ff2a6d;
+  --n-yel: #f5d300;
+  --n-grn: #39ff9e;
+  --n-text: #bdf6ff;
+  --n-muted: #4f8a99;
+  --n-font: "Share Tech Mono", ui-monospace, Menlo, monospace;
+  --n-disp: "Orbitron", "Share Tech Mono", sans-serif;
+}
+:root:not([data-theme="light"]) { color-scheme: dark; }
+:root[data-theme="dark"] { color-scheme: dark; }
+html, body { height: 100%; margin: 0; }
+[hidden] { display: none !important; }
+body { background: var(--ink); color: var(--a-text); overflow: hidden; overscroll-behavior: none; -webkit-user-select: none; user-select: none; font-family: var(--a-font); -webkit-tap-highlight-color: transparent; }
+canvas#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+body.view-agent canvas#game { cursor: crosshair; }
+body.view-op canvas#game { cursor: default; }
+
+/* ---------- agent HUD ---------- */
+.ahud { position: fixed; inset: 0; pointer-events: none; font-family: var(--a-font); color: var(--a-text); text-shadow: 0 1px 2px rgba(0,0,0,.7); }
+.a-obj { position: absolute; top: calc(12px + env(safe-area-inset-top)); left: calc(16px + env(safe-area-inset-left)); max-width: min(420px, 60vw); }
+.a-obj small { display: block; font-size: 12px; letter-spacing: .2em; color: var(--a-accent); text-transform: uppercase; }
+.a-obj b { display: block; font-size: 22px; font-weight: 600; letter-spacing: .03em; line-height: 1.1; }
+.a-obj span { font-size: 15px; color: var(--a-muted); }
+.a-link { position: absolute; top: calc(12px + env(safe-area-inset-top)); right: calc(16px + env(safe-area-inset-right)); width: min(330px, 46vw); display: grid; gap: 4px; justify-items: end; }
+.a-link .st { font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--a-muted); text-align: right; }
+.a-link .st i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--a-bad); margin-right: 6px; }
+.a-link .st.on i { background: #8fd18a; box-shadow: 0 0 6px #8fd18a; }
+.a-msg { font-size: 16px; background: var(--a-panel); border-left: 2px solid var(--a-accent); padding: 4px 10px; animation: msgIn .25s ease-out; text-align: left; }
+.a-msg em { font-style: normal; color: var(--a-accent); letter-spacing: .08em; margin-right: 6px; font-size: 13px; }
+.a-msg.me { border-left-color: var(--a-cloak); }
+.a-msg.me em { color: var(--a-cloak); }
+@keyframes msgIn { from { opacity: 0; transform: translateX(10px); } }
+.a-vitals { position: absolute; left: calc(16px + env(safe-area-inset-left)); bottom: calc(16px + env(safe-area-inset-bottom)); display: grid; gap: 6px; width: 240px; }
+.bar { height: 7px; background: rgba(255,255,255,.08); border: 1px solid var(--a-edge); }
+.bar i { display: block; height: 100%; width: 100%; background: var(--a-hp); transition: width .15s; }
+.bar.cloak i { background: var(--a-cloak); }
+.bar.low i { background: var(--a-bad); }
+.lbl { display: flex; justify-content: space-between; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--a-muted); }
+.lbl b { color: var(--a-text); font-weight: 600; }
+.modes { display: flex; gap: 6px; margin-top: 2px; flex-wrap: wrap; }
+.chip { font-size: 12px; letter-spacing: .14em; padding: 2px 7px; border: 1px solid var(--a-edge); color: var(--a-muted); background: var(--a-panel); }
+.chip.on { color: #10140c; background: var(--a-hp); border-color: var(--a-hp); }
+.chip.nv.on { background: #e8f1ff; border-color: #e8f1ff; }
+.chip.th.on { background: #ff7a3c; border-color: #ff7a3c; color: #180a04; }
+.chip.ck.on { background: var(--a-cloak); border-color: var(--a-cloak); }
+.chip.key.on { background: var(--a-accent); border-color: var(--a-accent); }
+.a-weap { position: absolute; right: calc(16px + env(safe-area-inset-right)); bottom: calc(16px + env(safe-area-inset-bottom)); text-align: right; }
+.a-weap b { font-size: 40px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; }
+.a-weap b small { font-size: 18px; color: var(--a-muted); }
+.a-weap span { display: block; font-size: 13px; letter-spacing: .18em; color: var(--a-muted); text-transform: uppercase; }
+.a-req { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 4px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--a-muted); white-space: nowrap; }
+.a-req span { padding: 3px 8px; background: var(--a-panel); border: 1px solid var(--a-edge); }
+.a-req span kbd { font: inherit; color: var(--a-accent); margin-right: 5px; }
+.a-req span.sent { border-color: var(--a-accent); color: var(--a-text); }
+.a-prompt { position: absolute; left: 50%; top: 60%; transform: translateX(-50%); font-size: 18px; letter-spacing: .08em; text-transform: uppercase; background: var(--a-panel); padding: 5px 14px; border: 1px solid var(--a-edge); white-space: nowrap; text-align: center; }
+.a-prompt kbd { font: inherit; color: var(--a-accent); }
+.a-prompt .sub { display: block; font-size: 13px; letter-spacing: .04em; color: var(--a-muted); text-transform: none; }
+.a-prompt .usekey { display: inline-block; font-size: 13px; font-weight: 700; letter-spacing: .06em; color: #17140a; background: var(--a-hp); border-radius: 4px; padding: 1px 7px; margin-right: 6px; }
+.tbtn.ready { border-color: var(--a-hp); box-shadow: 0 0 0 2px var(--a-hp), 0 0 14px rgba(201,211,180,.5); animation: readyPulse 1.1s infinite; }
+@keyframes readyPulse { 50% { box-shadow: 0 0 0 2px var(--a-hp), 0 0 22px rgba(201,211,180,.8); } }
+.a-banner { position: absolute; left: 50%; top: 68px; transform: translateX(-50%); font-size: 24px; font-weight: 700; letter-spacing: .3em; text-transform: uppercase; color: var(--a-bad); white-space: nowrap; text-align: center; }
+.a-banner.warn { color: var(--a-accent); font-size: 18px; }
+.a-toast { position: absolute; left: 50%; top: 40%; transform: translateX(-50%); font-size: 22px; letter-spacing: .14em; text-transform: uppercase; color: var(--a-text); opacity: 0; transition: opacity .3s; white-space: nowrap; text-align: center; }
+.a-toast.show { opacity: 1; }
+.hurt { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 120px rgba(170, 20, 10, .6); opacity: 0; transition: opacity .3s; }
+@media (max-width: 760px) { .a-req { display: none; } .a-obj b { font-size: 18px; } }
+/* touch controls (agent) */
+.a-touch { display: none; }
+body.touch .a-touch { display: block; }
+body.touch .a-req { display: none; }
+.a-tgl { position: absolute; left: calc(14px + env(safe-area-inset-left)); top: 96px; display: flex; gap: 6px; pointer-events: auto; }
+.a-tgl .tbtn { min-width: 52px; padding: 9px 8px; }
+.a-act { position: absolute; right: calc(20px + env(safe-area-inset-right)); bottom: calc(120px + env(safe-area-inset-bottom)); display: grid; gap: 12px; justify-items: end; pointer-events: auto; }
+.tbtn { pointer-events: auto; font: 600 14px var(--a-font); letter-spacing: .1em; color: var(--a-text); background: var(--a-panel); border: 1px solid var(--a-edge); border-radius: 8px; padding: 10px 12px; min-width: 64px; text-align: center; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+.tbtn.big { width: 84px; height: 84px; border-radius: 50%; font-size: 16px; font-weight: 700; display: grid; place-items: center; }
+.tbtn.amber { color: #17140a; background: var(--a-accent); border-color: var(--a-accent); }
+.tbtn.kill { color: #1a0d0a; background: var(--a-bad); border-color: var(--a-bad); }
+.tbtn.stealth { color: #06161a; background: var(--a-cloak); border-color: var(--a-cloak); }
+.tbtn.on { color: #10140c; background: var(--a-hp); border-color: var(--a-hp); }
+.tbtn:active { filter: brightness(1.3); }
+/* left-hand ability button — mirrors FIRE, for the right thumb's counterpart */
+/* sits above the bottom-left vitals block so it never covers the health / camo readouts */
+.a-abil { position: absolute; left: calc(20px + env(safe-area-inset-left)); bottom: calc(168px + env(safe-area-inset-bottom)); pointer-events: auto; }
+@media (max-height: 520px) { .a-abil { bottom: calc(150px + env(safe-area-inset-bottom)); } .a-abil .tbtn.big { width: 70px; height: 70px; } }
+.tbtn.ability { color: #06161a; background: var(--a-cloak); border-color: var(--a-cloak); line-height: 1; font-size: 26px; }
+.tbtn.ability small { display: block; font-size: 9px; letter-spacing: .12em; margin-top: 3px; opacity: .85; }
+.tbtn.ability.cooling { color: var(--a-text); background: var(--a-panel); border-color: var(--a-edge); opacity: .7; }
+.cbtn.arming { outline: 2px solid var(--a-accent); outline-offset: 1px; }
+/* always-visible agent call-down palette — right side, above the action buttons (right-thumb reach) */
+.a-reqpalette { position: absolute; right: calc(12px + env(safe-area-inset-right)); top: 96px; width: 198px; pointer-events: auto; background: rgba(8,10,12,.82); border: 1px solid var(--a-edge); border-radius: 8px; padding: 6px; }
+.rphdr { font-size: 10px; letter-spacing: .08em; color: var(--a-muted); text-transform: uppercase; margin-bottom: 5px; line-height: 1.25; text-align: center; cursor: move; touch-action: none; padding: 3px 2px 5px; border-bottom: 1px solid var(--a-edge); }
+.rphdr .grip { color: var(--a-accent); font-size: 12px; margin-right: 4px; }
+.rphdr small { display: block; font-size: 8px; color: var(--a-muted); opacity: .7; letter-spacing: 0; margin-top: 1px; text-transform: none; }
+.a-reqpalette.dragging { opacity: .9; box-shadow: 0 0 0 1px var(--a-accent); }
+.rpgrid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
+.rpgrid button { display: grid; grid-template-rows: auto auto; justify-items: center; gap: 1px; font: 600 9px var(--a-font); letter-spacing: .01em; color: var(--a-text); background: rgba(30,34,30,.85); border: 1px solid var(--a-edge); border-radius: 5px; padding: 6px 2px; touch-action: none; -webkit-user-select: none; user-select: none; }
+.rpgrid button b { font-size: 14px; color: var(--a-accent); line-height: 1; }
+.rpgrid button:active, .rpgrid button.arm { border-color: var(--a-accent); background: rgba(214,194,122,.22); color: #fff; }
+/* portrait phone: a touch wider for the larger screen */
+@media (orientation: portrait) { .a-reqpalette { width: 210px; } }
+@media (max-height: 440px) { .a-reqpalette { width: 186px; padding: 4px; } .rpgrid button { padding: 4px 2px; } .rphdr { margin-bottom: 3px; } .rphdr small { display: none; } }
+/* command bar (overwatch) */
+.n-cmd { position: absolute; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; gap: 6px; pointer-events: auto; flex-wrap: wrap; justify-content: center; max-width: 96vw; }
+.cbtn { font: 12px var(--n-font); letter-spacing: .1em; color: var(--n-text); background: rgba(5,12,22,.92); border: 1px solid var(--n-edge); padding: 9px 12px; cursor: pointer; text-transform: uppercase; touch-action: manipulation; }
+.cbtn:hover { border-color: var(--n-cyan); }
+.cbtn.on { color: #00151a; background: var(--n-cyan); border-color: var(--n-cyan); }
+.cbtn:active { filter: brightness(1.3); }
+/* versus warden action bar */
+.cbtn.def { color: #ffd0dc; background: rgba(28,6,12,.92); border-color: var(--n-mag); }
+.cbtn.def:hover { border-color: #ff6a95; }
+.dpow { display: flex; flex-direction: column; justify-content: center; padding: 2px 10px; font: 10px var(--n-font); letter-spacing: .14em; color: var(--n-muted); }
+.dpow b { font-family: var(--n-disp); font-size: 16px; color: var(--n-mag); }
+/* cyber-warfare intrusion HUD */
+.n-intr { position: absolute; left: 50%; top: 84px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(28,4,10,.92); border: 1px solid var(--n-mag); box-shadow: 0 0 22px rgba(255,42,109,.4); pointer-events: auto; z-index: 6; }
+.n-intr-lbl { font-family: var(--n-disp); font-size: 13px; letter-spacing: .16em; color: var(--n-mag); text-shadow: 0 0 10px var(--n-mag); white-space: nowrap; }
+.ibar { width: 150px; height: 8px; background: rgba(255,255,255,.1); border: 1px solid rgba(255,42,109,.5); }
+.ibar i { display: block; height: 100%; width: 0; background: var(--n-mag); box-shadow: 0 0 8px var(--n-mag); }
+.cbtn.purge { color: #1a0008; background: var(--n-mag); border-color: var(--n-mag); font-weight: 700; animation: purgePulse .7s infinite; }
+@keyframes purgePulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,42,109,.6); } 50% { box-shadow: 0 0 0 5px rgba(255,42,109,0); } }
+.n-offline { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(2,4,10,.34); z-index: 7; pointer-events: none; }
+.n-offline div { text-align: center; font-family: var(--n-disp); color: var(--n-mag); }
+.n-offline b { display: block; font-size: 30px; letter-spacing: .14em; text-shadow: 0 0 18px var(--n-mag); animation: glitch .25s steps(2) infinite; }
+.n-offline span { display: block; margin-top: 8px; font-size: 14px; letter-spacing: .2em; color: var(--n-muted); }
+@keyframes glitch { 0% { transform: translate(0,0); } 50% { transform: translate(1px,-1px); opacity: .8; } 100% { transform: translate(-1px,0); } }
+body.touch .n-hint { display: none; }
+body:not(.touch) .n-cmd { bottom: 42px; }
+
+/* ---------- overwatch HUD ---------- */
+.nhud { position: fixed; inset: 0; pointer-events: none; font-family: var(--n-font); color: var(--n-text); }
+.nhud::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,229,255,.025) 0 1px, transparent 1px 3px); }
+.n-top { position: absolute; top: 0; left: 0; right: 0; min-height: 44px; display: flex; align-items: center; gap: 16px; padding: 4px 14px; background: linear-gradient(180deg, rgba(0,20,32,.95), rgba(0,10,18,.75)); border-bottom: 1px solid var(--n-edge); }
+.n-brand { font-family: var(--n-disp); font-weight: 800; font-size: 14px; letter-spacing: .16em; color: var(--n-cyan); text-shadow: 0 0 10px rgba(0,229,255,.6); white-space: nowrap; }
+.n-brand em { font-style: normal; color: var(--n-mag); }
+.n-obj { flex: 1; min-width: 0; font-size: 13px; color: var(--n-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.n-obj b { color: var(--n-yel); font-weight: 400; margin-right: 8px; }
+.n-stat { font-size: 12px; letter-spacing: .1em; color: var(--n-muted); white-space: nowrap; }
+.n-stat b { color: var(--n-text); font-weight: 400; }
+.n-stat.alarm b { color: var(--n-mag); text-shadow: 0 0 8px var(--n-mag); }
+.n-left { position: absolute; top: 56px; left: 12px; width: 236px; display: grid; gap: 10px; max-height: calc(100vh - 68px); overflow: hidden; }
+.n-box { background: var(--n-panel); border: 1px solid var(--n-edge); padding: 10px; pointer-events: auto; clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px)); }
+.n-h { font-family: var(--n-disp); font-size: 10px; letter-spacing: .24em; color: var(--n-muted); margin-bottom: 8px; display: flex; justify-content: space-between; }
+.n-h b { color: var(--n-cyan); font-weight: 600; }
+.bw { height: 8px; background: rgba(0,229,255,.08); border: 1px solid var(--n-edge); }
+.bw i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, var(--n-cyan), #7af7ff); box-shadow: 0 0 10px rgba(0,229,255,.6); }
+.abil { display: grid; gap: 4px; }
+.ab { position: relative; display: grid; grid-template-columns: 20px 1fr auto; gap: 7px; align-items: center; width: 100%; padding: 6px 8px; background: rgba(0,229,255,.04); border: 1px solid rgba(0,229,255,.14); color: var(--n-text); font: 13px var(--n-font); text-align: left; cursor: pointer; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
+.ab kbd { font: inherit; color: var(--n-yel); }
+.ab .c { color: var(--n-muted); font-size: 11px; white-space: nowrap; }
+.ab:hover:not(.off) { border-color: var(--n-cyan); }
+.ab.sel { border-color: var(--n-yel); background: rgba(245,211,0,.1); box-shadow: inset 0 0 12px rgba(245,211,0,.15); }
+.ab.off { opacity: .4; cursor: default; }
+.ab .cd { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--n-mag); }
+.sect { display: grid; gap: 3px; font-size: 12px; }
+.sect div { display: flex; justify-content: space-between; }
+.sect .on { color: var(--n-grn); }
+.sect .lk { color: var(--n-mag); }
+.n-right { position: absolute; top: 56px; right: 12px; width: 300px; display: grid; gap: 10px; max-height: calc(100vh - 68px); }
+.comms { display: grid; gap: 3px; max-height: 30vh; overflow: hidden; align-content: start; font-size: 12px; }
+.comms div { line-height: 1.3; animation: msgIn .25s ease-out; }
+.comms .ag { color: var(--n-yel); }
+.comms .req { color: var(--n-mag); }
+.comms .sys { color: var(--n-muted); }
+.comms .me { color: var(--n-cyan); }
+.qc { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.qc button { font: 11px var(--n-font); color: var(--n-text); background: rgba(0,229,255,.06); border: 1px solid rgba(0,229,255,.2); padding: 4px 6px; cursor: pointer; }
+.qc button:hover { border-color: var(--n-cyan); }
+.qc kbd { font: inherit; color: var(--n-yel); }
+.trace { height: 8px; background: rgba(255,42,109,.1); border: 1px solid rgba(255,42,109,.4); }
+.trace i { display: block; height: 100%; width: 0; background: var(--n-mag); box-shadow: 0 0 10px var(--n-mag); }
+.up { height: 8px; background: rgba(57,255,158,.08); border: 1px solid rgba(57,255,158,.35); margin-bottom: 6px; }
+.up i { display: block; height: 100%; width: 0; background: var(--n-grn); box-shadow: 0 0 10px var(--n-grn); }
+.n-info { font-size: 12px; line-height: 1.4; min-height: 48px; }
+.n-info b { color: var(--n-yel); font-weight: 400; }
+.n-info .k { color: var(--n-muted); }
+.n-cam { position: absolute; right: 12px; bottom: 12px; width: min(360px, 32vw); aspect-ratio: 16 / 10; border: 1px solid var(--n-edge); background: #000; box-shadow: 0 0 24px rgba(0,229,255,.18); }
+.n-cam canvas { width: 100%; height: 100%; display: block; }
+.n-cam .tag { position: absolute; left: 8px; top: 6px; font-size: 11px; letter-spacing: .14em; color: #e8e3d0; text-shadow: 0 0 3px #000; }
+.n-cam .tag i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #e0303a; margin-right: 6px; animation: blink 1.2s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.n-cam .tag2 { position: absolute; right: 8px; bottom: 6px; font-size: 10px; color: #cfcab8; text-shadow: 0 0 3px #000; letter-spacing: .1em; }
+.n-hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); font-size: 12px; color: var(--n-muted); background: var(--n-panel); padding: 4px 10px; border: 1px solid var(--n-edge); white-space: nowrap; }
+.n-hint b { color: var(--n-yel); font-weight: 400; }
+.n-toast { position: absolute; left: 50%; top: 60px; transform: translateX(-50%); font-family: var(--n-disp); font-size: 13px; letter-spacing: .18em; color: var(--n-mag); text-shadow: 0 0 10px var(--n-mag); opacity: 0; transition: opacity .3s; white-space: nowrap; text-align: center; }
+.n-toast.show { opacity: 1; }
+@media (max-width: 980px) { .n-right { width: 232px; } .n-left { width: 204px; } .n-cam { width: 250px; } .n-hint { display: none; } }
+
+/* ---------- versus: the facility AI console (red) ---------- */
+.f-left { display: none; }
+.f-tint { display: none; position: absolute; inset: 0; pointer-events: none; z-index: 0;
+  background: radial-gradient(130% 90% at 50% 45%, rgba(255,20,60,.05), rgba(40,0,8,.34) 78%, rgba(50,0,10,.6) 100%);
+  mix-blend-mode: screen; }
+.f-tint::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(255,40,80,.05) 0 1px, transparent 1px 3px); mix-blend-mode: overlay; }
+body.versus .nhud { --n-cyan: #ff3b6b; --n-edge: rgba(255,42,109,.32); --n-text: #ffd7df; --n-muted: #b9617a; --n-panel: rgba(22,4,10,.86); }
+body.versus .n-left, body.versus .n-cam, body.versus #upBox { display: none !important; }
+body.versus .f-tint { display: block; }
+body.versus #facPanel { display: grid; }
+body.versus .n-brand { color: #ff3b6b; text-shadow: 0 0 12px rgba(255,42,109,.7); }
+body.versus .n-top { background: linear-gradient(180deg, rgba(32,0,10,.95), rgba(16,0,6,.75)); border-bottom-color: var(--n-edge); }
+.f-left { position: absolute; top: 56px; left: 12px; width: 240px; gap: 10px; max-height: calc(100vh - 68px); overflow: hidden; }
+.f-box { background: rgba(22,4,10,.86); border: 1px solid rgba(255,42,109,.32); padding: 10px; pointer-events: auto; clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px)); }
+.f-box.intruder { border-color: rgba(255,42,109,.5); box-shadow: 0 0 16px rgba(255,42,109,.16); }
+.f-h { font-family: var(--n-disp); font-size: 10px; letter-spacing: .22em; color: #b9617a; margin-bottom: 8px; display: flex; justify-content: space-between; }
+.f-h.sub { margin: 6px 0 6px; font-size: 9px; }
+.f-h b { color: #ff6a8c; font-weight: 600; }
+.f-box.intruder #fTrackT { color: #ff3b6b; text-shadow: 0 0 8px rgba(255,42,109,.6); }
+.fbar { height: 8px; background: rgba(255,42,109,.08); border: 1px solid rgba(255,42,109,.3); }
+.fbar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ff3b6b, #ff8aa6); box-shadow: 0 0 10px rgba(255,42,109,.6); }
+.fbar.prog i { background: linear-gradient(90deg, #ffb13b, #ff3b6b); }
+.f-roster { display: grid; gap: 5px; font: 12px var(--n-font); color: var(--n-text); }
+.f-roster div { display: flex; justify-content: space-between; }
+.f-roster span.v { color: #ff8aa6; }
+.f-roster span.lost { color: #6b3a46; }
+.f-sel-hint { font: 11px var(--n-font); color: #b9617a; }
+@media (max-width: 980px) { .f-left { width: 200px; } }
+
+/* ---------- shared toggle ---------- */
+body.split #ahud { display: none !important; }   /* split-screen draws its own per-half HUD on the canvas */
+.pausebtn { position: fixed; top: calc(8px + env(safe-area-inset-top)); right: calc(10px + env(safe-area-inset-right)); z-index: 40; width: 40px; height: 40px; display: grid; place-items: center; pointer-events: auto; cursor: pointer; font: 12px/1 var(--a-font); letter-spacing: 1px; color: var(--a-text); background: rgba(10,14,18,.8); border: 1px solid var(--a-edge); border-radius: 8px; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+.pausebtn:active { filter: brightness(1.35); }
+body.touch .pausebtn { width: 46px; height: 46px; font-size: 13px; }
+body.view-op .pausebtn { color: var(--n-text); background: rgba(5,12,22,.86); border-color: var(--n-edge); }
+body.versus .pausebtn { color: #ffd7df; border-color: rgba(255,42,109,.45); background: rgba(22,4,10,.86); }
+.a-link { right: calc(60px + env(safe-area-inset-right)); }
+body.view-op .n-top { padding-right: 58px; }
+.swap { position: fixed; top: calc(10px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 6; pointer-events: auto; display: flex; gap: 0; border: 1px solid var(--n-edge); background: rgba(5,12,22,.9); font-family: var(--n-font); }
+.swap button { font: 11px var(--n-font); letter-spacing: .12em; color: var(--n-muted); background: transparent; border: 0; padding: 6px 12px; cursor: pointer; text-transform: uppercase; }
+.swap button.on { color: #00151a; background: var(--n-cyan); }
+.swap .tag { font-size: 10px; color: var(--n-muted); align-self: center; padding: 0 10px 0 4px; }
+
+/* ---------- overlays ---------- */
+.overlay { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; overflow-y: auto; padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); background: radial-gradient(ellipse at 70% 10%, rgba(0,229,255,.08), transparent 55%), radial-gradient(ellipse at 10% 90%, rgba(214,194,122,.07), transparent 50%), rgba(4,6,9,.92); }
+.card { width: min(760px, 100%); display: grid; gap: 16px; font-family: var(--a-font); }
+.eyebrow { font-family: var(--n-font); font-size: 12px; letter-spacing: .3em; color: var(--n-cyan); text-transform: uppercase; }
+h1 { font-family: var(--n-disp); font-weight: 800; font-size: clamp(34px, 8vw, 64px); line-height: .95; margin: 0; letter-spacing: .04em; color: #eef6f8; }
+h1 em { font-style: normal; color: var(--n-cyan); text-shadow: 0 0 22px rgba(0,229,255,.55); }
+h2 { font-family: var(--n-disp); font-size: 22px; margin: 0; letter-spacing: .06em; }
+p { margin: 0; line-height: 1.45; color: var(--a-muted); font-size: 16px; max-width: 66ch; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 620px) { .grid2 { grid-template-columns: 1fr; } }
+.opt { text-align: left; padding: 15px; border: 1px solid var(--a-edge); background: rgba(22,24,26,.8); color: var(--a-text); font: inherit; cursor: pointer; display: grid; gap: 5px; }
+.opt b { font-size: 21px; letter-spacing: .05em; text-transform: uppercase; }
+.opt span { font-size: 14px; color: var(--a-muted); line-height: 1.35; }
+.opt:hover:not([disabled]), .opt:focus-visible { border-color: var(--a-accent); outline: none; }
+.opt.cy { background: rgba(3,14,24,.85); border-color: rgba(0,229,255,.22); font-family: var(--n-font); }
+.opt.cy b { font-family: var(--n-disp); font-size: 17px; color: var(--n-cyan); }
+.opt.cy span { font-size: 13px; color: var(--n-muted); }
+.opt.cy:hover:not([disabled]), .opt.cy:focus-visible { border-color: var(--n-cyan); box-shadow: 0 0 18px rgba(0,229,255,.2); }
+.opt[disabled] { opacity: .4; cursor: default; }
+.opt.sel { border-color: var(--a-accent); box-shadow: 0 0 0 1px var(--a-accent); }
+.opt.cy.sel { border-color: var(--n-cyan); box-shadow: 0 0 0 1px var(--n-cyan); }
+.opt.mag { background: rgba(24,4,10,.85); border-color: rgba(255,42,109,.26); font-family: var(--n-font); }
+.opt.mag b { font-family: var(--n-disp); font-size: 17px; color: var(--n-mag); }
+.opt.mag span { font-size: 13px; color: var(--n-muted); }
+.opt.mag:hover:not([disabled]), .opt.mag:focus-visible { border-color: var(--n-mag); box-shadow: 0 0 18px rgba(255,42,109,.2); }
+.opt.mag.sel { border-color: var(--n-mag); box-shadow: 0 0 0 1px var(--n-mag); }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.btn { padding: 12px 22px; font: 700 17px var(--a-font); letter-spacing: .14em; text-transform: uppercase; background: var(--a-accent); color: #17140a; border: 0; cursor: pointer; }
+.btn.cy { background: var(--n-cyan); color: #00151a; font-family: var(--n-disp); font-size: 13px; }
+.btn[disabled] { opacity: .45; cursor: default; }
+.btn2 { padding: 10px 18px; font: 600 15px var(--a-font); letter-spacing: .1em; text-transform: uppercase; background: transparent; color: var(--a-text); border: 1px solid var(--a-edge); cursor: pointer; }
+.btn:focus-visible, .btn2:focus-visible, .opt:focus-visible { outline: 2px solid var(--n-cyan); outline-offset: 2px; }
+.coop { display: grid; gap: 8px; padding: 14px; border: 1px solid rgba(0,229,255,.2); background: rgba(3,14,24,.6); font-family: var(--n-font); }
+.coop .hd { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--n-muted); }
+.coop .hd b { font-family: var(--n-disp); font-size: 13px; letter-spacing: .2em; color: var(--n-cyan); }
+.coop p { font-size: 14px; font-family: var(--n-font); color: var(--n-muted); }
+.code { font-family: var(--n-disp); font-size: 30px; letter-spacing: .3em; color: #fff; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--n-muted); margin-right: 6px; }
+.dot.live { background: var(--n-grn); box-shadow: 0 0 8px var(--n-grn); }
+.ctrls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+.ctrls div { font-size: 15px; color: var(--a-muted); line-height: 1.5; }
+.ctrls h3 { margin: 0 0 4px; font-size: 14px; letter-spacing: .18em; text-transform: uppercase; color: var(--a-accent); }
+.ctrls .ow h3 { color: var(--n-cyan); font-family: var(--n-disp); font-size: 11px; }
+.ctrls .ow { font-family: var(--n-font); font-size: 13px; }
+.ctrls kbd { font: inherit; color: var(--a-text); }
+.steps { margin: 0; padding-left: 20px; color: var(--a-muted); font-size: 15px; line-height: 1.5; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 12px; }
+.stat { border-top: 1px solid var(--a-edge); padding-top: 6px; }
+.stat b { display: block; font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--a-muted); }
+.rating { font-family: var(--n-disp); font-size: 22px; letter-spacing: .14em; color: var(--n-grn); }
+.rating.bad { color: var(--n-mag); }
+.small { font-size: 13px; color: var(--a-muted); }
+.diffwrap { display: grid; gap: 6px; }
+.difflbl { font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: var(--a-muted); }
+.diffsel { display: flex; gap: 8px; flex-wrap: wrap; }
+.diffsel button { flex: 1; min-width: 120px; text-align: left; padding: 10px 12px; border: 1px solid var(--a-edge); background: rgba(22,24,26,.8); color: var(--a-text); font: inherit; cursor: pointer; border-radius: 4px; display: grid; gap: 2px; }
+.diffsel button b { font-size: 16px; letter-spacing: .04em; text-transform: uppercase; }
+.diffsel button span { font-size: 12px; color: var(--a-muted); }
+.diffsel button.on { border-color: var(--a-accent); box-shadow: 0 0 0 1px var(--a-accent); }
+.diffsel button.on b { color: var(--a-accent); }
+.themewrap { display: grid; gap: 8px; margin: 4px 0 2px; }
+.themesel { display: flex; gap: 10px; flex-wrap: wrap; }
+.themesel button { display: grid; gap: 5px; justify-items: center; background: none; border: 0; cursor: pointer; padding: 2px; font: inherit; }
+.themesel .sw { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255,255,255,.18); box-shadow: 0 0 10px -2px currentColor; }
+.themesel button.on .sw { border-color: #fff; box-shadow: 0 0 0 2px #fff, 0 0 14px currentColor; }
+.themesel span { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--n-muted); }
+.themesel button.on span { color: var(--n-text); }
+
+/* ================= Cyberpunk 2077 netrunner overhaul (theme "Cyberpunk") ================= */
+.cp-fx, .cp-brain { display: none; }
+body.theme-cp.view-op .cp-fx { display: block; position: fixed; inset: 0; z-index: 36; pointer-events: none; }
+/* CRT scanlines + rolling flicker over the whole console */
+.cp-fx::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(0,0,0,0) 0 2px, rgba(0,0,0,.22) 2px 3px); mix-blend-mode: multiply; animation: cpRoll 7s linear infinite; }
+.cp-fx::after { content: ''; position: absolute; inset: 0; background: radial-gradient(130% 100% at 50% 48%, transparent 52%, rgba(255,0,48,.07) 100%), radial-gradient(130% 100% at 50% 48%, transparent 60%, rgba(0,255,224,.05) 100%); animation: cpFlick 4s steps(40) infinite; }
+@keyframes cpRoll { to { background-position: 0 240px; } }
+@keyframes cpFlick { 0%,94%,100% { opacity: 1; } 95% { opacity: .82; } 96% { opacity: .95; } 97% { opacity: .78; } }
+/* a faint teal data-rain band sweeping down */
+.cp-rain { position: absolute; inset: 0; background: repeating-linear-gradient(90deg, rgba(0,255,224,.05) 0 1px, transparent 1px 7px); animation: cpRainMove 5s linear infinite; opacity: .5; }
+@keyframes cpRainMove { to { background-position: 0 180px; } }
+/* occasional horizontal glitch slice */
+.cp-glitch { position: absolute; left: 0; right: 0; height: 2px; top: 30%; background: rgba(0,255,224,.5); mix-blend-mode: screen; opacity: 0; animation: cpSlice 6.5s steps(1) infinite; }
+@keyframes cpSlice { 0%,10%,100% { opacity: 0; } 2% { opacity: .6; top: 22%; transform: translateX(6px); } 4% { opacity: .5; top: 61%; transform: translateX(-8px); } 6% { opacity: .4; top: 44%; } 7% { opacity: 0; } }
+/* glitchy RGB-split brand + alarm chip */
+body.theme-cp .n-brand { animation: cpBrand 5s infinite; }
+@keyframes cpBrand { 0%,90%,100% { text-shadow: 0 0 10px rgba(0,255,224,.6); } 91% { text-shadow: -2px 0 #ff2a6d, 2px 0 #00ffe0; } 93% { text-shadow: 2px 0 #ff2a6d, -2px 0 #00ffe0; } 95% { text-shadow: 0 0 10px rgba(0,255,224,.6); } }
+/* knurled hazard accent on panel tops */
+body.theme-cp .n-box, body.theme-cp .f-box { position: relative; }
+body.theme-cp .n-box::before, body.theme-cp .f-box::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: repeating-linear-gradient(135deg, var(--n-cyan) 0 3px, transparent 3px 7px); opacity: .5; }
+/* the jacked-in staticky brain */
+body.theme-cp.view-op .cp-brain { display: grid; position: fixed; left: calc(14px + env(safe-area-inset-left)); bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 34; pointer-events: none; justify-items: center; gap: 2px; opacity: .7; filter: drop-shadow(0 0 7px rgba(0,255,224,.45)); }
+.cp-brain svg { width: 46px; height: 42px; }
+/* keep it clear of the tall left panel column on short screens */
+@media (max-width: 980px), (max-height: 680px) { body.theme-cp.view-op .cp-brain { display: none; } }
+.cp-brain svg { animation: cpBrainPulse 2.4s ease-in-out infinite; }
+@keyframes cpBrainPulse { 0%,100% { opacity: .82; transform: scale(1); } 50% { opacity: 1; transform: scale(1.04); } }
+.cp-brain-lbl { font: 9px var(--n-disp); letter-spacing: .18em; color: var(--n-cyan); text-align: center; text-shadow: 0 0 8px rgba(0,255,224,.6); }
+.cp-brain-lbl b { display: block; font-weight: 400; color: #39ff9e; font-size: 10px; letter-spacing: .14em; }
+/* segmented cyberdeck-RAM look for the bandwidth bar */
+body.theme-cp .bw { position: relative; }
+body.theme-cp .bw::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 7px, rgba(2,8,12,.9) 7px 9px); pointer-events: none; }
+</style>
+</head>
+<body class="view-agent">
+
+<canvas id="game"></canvas>
+
+<!-- agent HUD -->
+<div class="ahud" id="ahud" hidden>
+  <div class="a-obj"><small id="aStep">Objective 1 / 8</small><b id="aObj">Breach the perimeter</b><span id="aObjSub"></span></div>
+  <div class="a-link"><div class="st" id="aLink"><i></i>Overwatch offline</div><div id="aMsgs"></div></div>
+  <div class="a-banner" id="aBanner" hidden></div>
+  <div class="a-toast" id="aToast"></div>
+  <div class="a-prompt" id="aPrompt" hidden></div>
+  <div class="a-vitals">
+    <div class="lbl"><span>Health</span><b id="aHpT">100</b></div>
+    <div class="bar" id="aHp"><i></i></div>
+    <div class="lbl"><span>Optic camo</span><b id="aCkT">100%</b></div>
+    <div class="bar cloak" id="aCk"><i></i></div>
+    <div class="modes"><span class="chip nv" id="cNv">NV</span><span class="chip th" id="cTh">THERMAL</span><span class="chip ck" id="cCk">CAMO</span><span class="chip key" id="cKey">KEYCARD</span><span class="chip key" id="cDrive">DRIVE</span></div>
+  </div>
+  <div class="a-req" id="aReq">
+    <span data-r="door"><kbd>1</kbd>Door</span><span data-r="distract"><kbd>2</kbd>Distract</span><span data-r="supply"><kbd>3</kbd>Supplies</span><span data-r="lights"><kbd>4</kbd>Lights</span><span data-r="scan"><kbd>5</kbd>Scan</span><span data-r="ping"><kbd>F</kbd>Ping</span>
+  </div>
+  <div class="a-weap"><b id="aAmmo">10<small> / 30</small></b><span>P-9 Suppressed</span></div>
+  <!-- touch controls (agent) -->
+  <div class="a-touch" id="aTouch">
+    <div class="a-tgl"><button class="tbtn" id="tCamo">CAMO</button><button class="tbtn" id="tNv">NV</button><button class="tbtn" id="tTherm">THERM</button></div>
+    <div class="a-act"><button class="tbtn big" id="tAct">USE</button><button class="tbtn big amber" id="tFire">FIRE</button><button class="tbtn" id="tReload">RELOAD</button></div>
+    <div class="a-abil"><button class="tbtn big ability" id="tAbility">◈<small>CAMO</small></button></div>
+    <div class="a-reqpalette" id="aReqGrid">
+      <div class="rphdr" id="rpHandle"><span class="grip">⠿</span>CALL-DOWNS<small>hold here to move</small></div>
+      <div class="rpgrid">
+        <button data-r="scan"><b>◎</b>Scan</button><button data-r="ping"><b>⌖</b>Ping</button><button data-r="door"><b>▤</b>Door</button><button data-r="lights"><b>☾</b>Lights</button><button data-r="distract"><b>♪</b>Distract</button>
+        <button data-r="decoy"><b>⦿</b>Decoy</button><button data-r="jam"><b>⚡</b>Jam</button><button data-r="emp"><b>✺</b>EMP</button><button data-r="spoof"><b>▣</b>Spoof</button><button data-r="supply"><b>✚</b>Supply</button>
+        <button data-r="cdrone"><b>✦</b>Drone</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="hurt" id="hurt"></div>
+
+<!-- overwatch HUD -->
+<div class="nhud" id="nhud" hidden>
+  <div class="f-tint" id="facTint"></div>
+  <!-- Cyberpunk netrunner FX layer (scanlines, flicker, data rain) -->
+  <div class="cp-fx" id="cpFx" aria-hidden="true"><span class="cp-rain"></span><span class="cp-glitch"></span></div>
+  <!-- jacked-in "staticky brain" widget -->
+  <div class="cp-brain" id="cpBrain" aria-hidden="true">
+    <svg viewBox="0 0 80 72" width="70" height="63">
+      <defs>
+        <filter id="cpStatic" x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="7" stitchTiles="stitch" result="n">
+            <animate attributeName="baseFrequency" dur="0.45s" values="0.85;0.7;0.95;0.78;0.9" repeatCount="indefinite"/>
+          </feTurbulence>
+          <feColorMatrix in="n" type="matrix" values="0 0 0 0 0   0 0 0 0 1   0 0 0 0 0.86   0 0 0 0.85 0"/>
+        </filter>
+        <clipPath id="cpBrainClip"><path d="M40 6 C29 6 23 13 23 22 C14 23 11 34 18 40 C12 48 20 60 31 57 C33 66 47 66 49 57 C60 60 68 48 62 40 C69 34 66 23 57 22 C57 13 51 6 40 6 Z"/></clipPath>
+      </defs>
+      <g clip-path="url(#cpBrainClip)"><rect x="0" y="0" width="80" height="72" filter="url(#cpStatic)"/></g>
+      <path d="M40 6 C29 6 23 13 23 22 C14 23 11 34 18 40 C12 48 20 60 31 57 C33 66 47 66 49 57 C60 60 68 48 62 40 C69 34 66 23 57 22 C57 13 51 6 40 6 Z" fill="none" stroke="var(--n-cyan)" stroke-width="1.6"/>
+      <path d="M40 8 L40 58 M31 18 C37 22 37 30 31 32 M49 18 C43 22 43 30 49 32 M28 42 C34 40 37 46 32 50 M52 42 C46 40 43 46 48 50" fill="none" stroke="var(--n-cyan)" stroke-width="1" opacity="0.7"/>
+    </svg>
+    <div class="cp-brain-lbl">NEURAL LINK<b id="cpBrainStat">SYNCED</b></div>
+  </div>
+  <div class="n-top">
+    <div class="n-brand">CYBER&nbsp;OPS<em>//</em>CS-7</div>
+    <div class="n-obj" id="nObj"><b>OBJ 1/8</b>Breach the perimeter</div>
+    <div class="n-stat" id="nAlarm">SEC <b>QUIET</b></div>
+    <div class="n-stat">T+ <b id="nTime">00:00</b></div>
+  </div>
+  <div class="n-left">
+    <div class="n-box"><div class="n-h"><span>BANDWIDTH</span><b id="nBwT">100</b></div><div class="bw" id="nBw"><i></i></div></div>
+    <div class="n-box"><div class="n-h"><span>PAYLOADS</span></div><div class="abil" id="abil"></div></div>
+    <div class="n-box"><div class="n-h"><span>NETWORK</span><b id="nNet">PERIMETER</b></div><div class="sect" id="sect"></div></div>
+  </div>
+  <!-- versus: the facility AI's own console (red) -->
+  <div class="f-left" id="facPanel" hidden>
+    <div class="f-box"><div class="f-h"><span>SYSTEM POWER</span><b id="fPowT">100</b></div><div class="fbar"><i id="fPowBar"></i></div></div>
+    <div class="f-box intruder" id="fTrack"><div class="f-h"><span>INTRUDER</span><b id="fTrackT">GHOST</b></div><div class="f-h sub"><span>Breach progress</span><b id="fProgT">0 / 8</b></div><div class="fbar prog"><i id="fProgBar"></i></div></div>
+    <div class="f-box"><div class="f-h"><span>DEFENSE GRID</span><b id="fUnitsT">—</b></div><div class="f-roster" id="fRoster"></div></div>
+    <div class="f-box sel" id="fSelBox" hidden><div class="f-h"><span>SELECTED UNIT</span><b id="fSelT">—</b></div><div class="f-sel-hint">Tap the map to send it there.</div></div>
+  </div>
+  <div class="n-right">
+    <div class="n-box" id="upBox" hidden>
+      <div class="n-h"><span>EVIDENCE COPY</span><b id="upT">0%</b></div><div class="up" id="upBar"><i></i></div>
+      <div class="n-h"><span>SENTINEL SWEEP</span><b id="trT">0%</b></div><div class="trace" id="trBar"><i></i></div>
+    </div>
+    <div class="n-box"><div class="n-h"><span>COMMS</span><b id="nLink">AGENT OFFLINE</b></div><div class="comms" id="comms"></div><div class="qc" id="qc"></div></div>
+    <div class="n-box"><div class="n-h"><span>TARGET</span></div><div class="n-info" id="nInfo"><span class="k">Hover a device or contact.</span></div></div>
+  </div>
+  <div class="n-toast" id="nToast"></div>
+  <!-- cyber-warfare: enemy intrusion on the operator's feed -->
+  <div class="n-intr" id="nIntr" hidden>
+    <div class="n-intr-lbl" id="nIntrLbl">⚠ ICE INTRUSION</div>
+    <div class="ibar"><i id="nIntrBar"></i></div>
+    <button class="cbtn purge" id="nPurge">PURGE</button>
+  </div>
+  <div class="n-offline" id="nOffline" hidden><div><b>OVERWATCH OFFLINE</b><span id="nOfflineT">rebooting…</span></div></div>
+  <div class="n-hint" id="nHint"><b>CLICK</b> device: hack · <b>CLICK</b> contact: tag · <b>RIGHT-CLICK</b>: waypoint · <b>1-8</b> payloads · <b>wheel</b> zoom</div>
+  <!-- command bar (overwatch -> agent) -->
+  <div class="n-cmd" id="nCmd">
+    <button class="cbtn" id="cmdMove">MOVE HERE</button>
+    <button class="cbtn" id="cmdHold">HOLD</button>
+    <button class="cbtn" id="cmdGo">GO</button>
+    <button class="cbtn" id="cmdBack">FALL BACK</button>
+    <button class="cbtn" id="cmdWake">EYES UP</button>
+  </div>
+  <!-- versus: warden action bar (replaces the agent-command bar) -->
+  <div class="n-cmd def" id="dCmd" hidden>
+    <div class="dpow"><span>POWER</span><b id="dPowT">70</b></div>
+    <button class="cbtn def" id="dRally">RALLY</button>
+    <button class="cbtn def" id="dLock">LOCKDOWN</button>
+    <button class="cbtn def" id="dHack">HACK OP</button>
+    <button class="cbtn def" id="dScan">SCAN</button>
+  </div>
+  <div class="n-cam"><canvas id="bodycam"></canvas><div class="tag"><i></i>BODYCAM // AGENT</div><div class="tag2" id="camTag">LINK —</div></div>
+</div>
+
+<!-- pause button (always reachable in-game, incl. touch) -->
+<button class="pausebtn" id="pauseBtn" hidden aria-label="Pause">❚❚</button>
+
+<!-- perspective toggle (solo-both) -->
+<div class="swap" id="swap" hidden>
+  <span class="tag">SOLO</span>
+  <button data-v="agent" class="on">AGENT</button>
+  <button data-v="op">OVERWATCH</button>
+</div>
+
+<!-- menu -->
+<div class="overlay" id="menu">
+  <div class="card">
+    <div class="eyebrow">2-player asymmetric co-op · stealth infiltration</div>
+    <h1>CYBER OPS<br><em>COLD ARCHIVE</em></h1>
+    <p>A whistleblower hid proof of an illegal autonomous-drone program inside the Halden compute campus before they vanished. The evidence sits on a cold archive server, air-gapped behind guards, cameras and patrol drones. One of you goes in on foot. The other rides the network. The agent can't open a door without overwatch; overwatch can't touch the deep network until the agent plants the relays. Every map is generated fresh.</p>
+    <div class="grid2">
+      <button class="opt" id="mSolo"><b>Single operator</b><span>Play solo. Toggle between both perspectives, or take one role while an AI teammate runs the other.</span></button>
+      <button class="opt cy" id="mCoop"><b>Two-player co-op</b><span>You and a friend on two devices. Host a squad, share the page, pick your roles and deploy together.</span></button>
+    </div>
+    <div class="row"><button class="btn2" id="howBtn">Briefing &amp; controls</button></div>
+  </div>
+</div>
+
+<!-- solo setup -->
+<div class="overlay" id="solo" hidden>
+  <div class="card">
+    <div class="eyebrow">Single operator</div>
+    <h2>Choose how you run it</h2>
+    <div class="grid2">
+      <button class="opt" data-solo="both"><b>Commander — both roles</b><span>You drive both sides and toggle between them (Tab). The facility keeps running while you're on the other screen.</span></button>
+      <button class="opt" data-solo="agent"><b>Field agent + AI overwatch</b><span>You're boots on the ground. An AI handler hacks doors ahead of you, tags threats, cuts lights and drops supplies.</span></button>
+      <button class="opt cy" data-solo="op"><b>Overwatch + AI agent</b><span>You run the console. An AI agent moves through the building; mark threats and open the way.</span></button>
+      <button class="opt" data-solo="duo"><b>Duo — two agents + console</b><span>Two field agents infiltrate together (one you, one AI partner that follows and fights). Toggle to the overwatch console any time (Tab). Co-op lets a friend drive the second agent.</span></button>
+      <button class="opt" data-solo="split"><b>Split-screen — two agents</b><span>Hold each end of the iPad: the screen splits down the middle and each player drives their own field agent with their own sticks (outer side = move, inner side = aim &amp; fire).</span></button>
+      <button class="opt cy" data-solo="split-op"><b>Split-screen — Overwatch + agent</b><span>One of you runs the Overwatch console (tap abilities, tap the map to hack doors, drop supplies, mark threats); the other is the field agent. Hold opposite ends.</span></button>
+      <button class="opt cy" data-solo="split-toggle"><b>Split-screen — both can swap roles</b><span>Each half has a SWAP button: flip your side between field agent and Overwatch console any time. Your agent runs on AI while you're on the console.</span></button>
+      <button class="opt mag" data-solo="split-fac"><b>Split-screen — Facility vs Strike team</b><span>One player IS the datacenter (command guards &amp; drones, lock down, hack); the other runs Overwatch + a field agent (SWAP between them). Asymmetric 1v1.</span></button>
+      <button class="opt" data-solo="practice"><b>Agent range</b><span>Just the agent, no objectives — learn movement, camo, night vision and takedowns.</span></button>
+      <button class="opt mag" data-solo="versus"><b>Versus — play the facility</b><span>You ARE the datacenter. Reroute patrols, lock down, hack the operator and hunt an AI infiltration team before they exfil the drive.</span></button>
+    </div>
+    <div class="diffwrap"><span class="difflbl">Difficulty</span><div class="diffsel" id="soloDiff"></div></div>
+    <div class="diffwrap"><span class="difflbl">Agent loadout</span><div class="diffsel kitsel" id="soloKit"></div></div>
+    <div class="diffwrap"><span class="difflbl">Modifiers</span><div class="diffsel"><button id="soloCyber" class="mod"><b>⚡ Cyber Warfare</b><span>Enemy ICE hacks the overwatch console mid-mission — purge it fast or go dark for a few seconds.</span></button></div></div>
+    <div class="row"><button class="btn" id="soloStart" disabled>Deploy</button><button class="btn2" id="soloBack">Back</button></div>
+  </div>
+</div>
+
+<!-- co-op lobby -->
+<div class="overlay" id="lobby" hidden>
+  <div class="card">
+    <div class="eyebrow" id="lobEyebrow">Co-op</div>
+    <h2 id="lobTitle">Two-player co-op</h2>
+    <div class="coop" id="coop"></div>
+    <div class="grid2" id="roles" hidden>
+      <button class="opt" data-role="agent"><b>Field Agent</b><span>Boots on the ground. Silenced pistol, optic camo, night vision, lockpicks. Plant the relays, carry the drive out.</span></button>
+      <button class="opt cy" data-role="op"><b>OVERWATCH</b><span>Netrunner console. Hack doors &amp; cameras, cut lights, tag guards, jam earpieces, EMP drones, drop supplies.</span></button>
+    </div>
+    <div class="diffwrap" id="lobDiffWrap" hidden><span class="difflbl">Difficulty (host sets)</span><div class="diffsel" id="lobDiff"></div></div>
+    <div class="diffwrap" id="lobKitWrap" hidden><span class="difflbl">Agent loadout</span><div class="diffsel kitsel" id="lobKit"></div></div>
+    <div class="diffwrap" id="lobCyberWrap" hidden><span class="difflbl">Modifiers (host sets)</span><div class="diffsel"><button id="lobCyber" class="mod"><b>⚡ Cyber Warfare</b><span>Enemy ICE hacks the overwatch console mid-mission — purge it fast or go dark.</span></button></div></div>
+    <div class="row"><button class="btn" id="deployBtn" hidden disabled>Deploy</button><button class="btn2" id="lobBack">Back</button></div>
+  </div>
+</div>
+
+<!-- briefing -->
+<div class="overlay" id="how" hidden>
+  <div class="card">
+    <div class="eyebrow">Operation Cold Archive</div>
+    <h2>The job</h2>
+    <ol class="steps">
+      <li>Slip through the cut in the fence and pick the maintenance door.</li>
+      <li>Plant a relay at the utility junction — overwatch gets the building network.</li>
+      <li>Lift the keycard off the Site Chief. Overwatch can find him on the cameras.</li>
+      <li>Pick into the network room and plant the second relay — overwatch gets the core.</li>
+      <li>Swipe into the archive vault while overwatch cracks the lock.</li>
+      <li>Hold the uplink while the evidence copies to the cold drive. Overwatch fights SENTINEL's sweep.</li>
+      <li>Pull the drive. SENTINEL seals the building.</li>
+      <li>Overwatch reopens the dock. Carry the drive to the van.</li>
+    </ol>
+    <div class="ctrls">
+      <div><h3>Field agent</h3><kbd>WASD</kbd> move · <kbd>Shift</kbd> sneak<br><kbd>Mouse</kbd> aim · <kbd>Click</kbd> fire (still makes noise)<br><kbd>E</kbd> takedown / interact / pick lock<br><kbd>Q</kbd> camo · <kbd>N</kbd> night vision · <kbd>T</kbd> thermal<br><kbd>R</kbd> reload · <kbd>1-5</kbd> request · <kbd>F</kbd> ping<br>Touch: left pad moves, right pad aims &amp; fires</div>
+      <div class="ow"><h3>Overwatch</h3><kbd>Click</kbd> door / camera / device to hack<br><kbd>Click</kbd> a contact to tag it for the agent<br><kbd>Right-click</kbd> drop a waypoint for the agent<br><kbd>1-8</kbd> payloads: scan, jam, EMP, supply, lights, spoof, decoy, combat drone<br>Drag an ability onto the map, or tap it then tap a spot<br><kbd>Z X C V</kbd> quick comms · wheel/drag to zoom &amp; pan</div>
+      <div><h3>Commander (solo)</h3>You control both. <kbd>Tab</kbd> swaps between the agent and the console. The world keeps moving while you're on the other side.</div>
+    </div>
+    <div class="row"><button class="btn2" id="howBack">Back</button></div>
+  </div>
+</div>
+
+<!-- pause -->
+<div class="overlay" id="pause" hidden>
+  <div class="card">
+    <div class="eyebrow">Mission paused</div>
+    <h2 id="pauseTitle">Holding position</h2>
+    <p id="pauseText">Solo pauses the facility. In co-op the world keeps running.</p>
+    <div class="themewrap"><span class="difflbl">Operator console theme</span><div class="themesel" id="themeSel"></div></div>
+    <div class="row"><button class="btn" id="resumeBtn">Resume</button><button class="btn2" id="abortBtn">Exit to menu</button></div>
+  </div>
+</div>
+
+<!-- results -->
+<div class="overlay" id="results" hidden>
+  <div class="card">
+    <div class="eyebrow" id="resEyebrow">Debrief</div>
+    <h2 id="resTitle">Evidence recovered</h2>
+    <div class="rating" id="resRating">GHOST</div>
+    <p id="resText"></p>
+    <div class="stats" id="resStats"></div>
+    <div class="row"><button class="btn" id="againBtn">New facility</button><button class="btn2" id="resMenu">Back to menu</button></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+<script>
+// Fallback CDN for the peer-to-peer co-op library, in case the first host is unreachable.
+if (!window.Peer) { var s = document.createElement('script'); s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js'; document.head.appendChild(s); }
+</script>
+<script src="game.js"></script>
+<script>
+// Register the service worker only on a real web host (not on claude.ai artifacts or file://),
+// so the standalone PWA works offline for single-player without affecting the Claude build.
+if ('serviceWorker' in navigator && !window.claude && location.protocol.indexOf('http') === 0) {
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
+</body>
+</html>

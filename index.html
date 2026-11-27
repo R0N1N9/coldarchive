@@ -13,7 +13,7 @@
 <title>Cyber Ops: Cold Archive</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Share+Tech+Mono&family=Orbitron:wght@600;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Share+Tech+Mono&family=Orbitron:wght@600;800&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
 <style>
 /* Two players, two looks. The agent screen is a tight, realistic twin-stick view;
    the overwatch console is a full-map netrunner terminal with a bodycam inset. */
@@ -42,6 +42,23 @@
 }
 :root:not([data-theme="light"]) { color-scheme: dark; }
 :root[data-theme="dark"] { color-scheme: dark; }
+/* NightWatch universe: the Inked IP fonts (Rajdhani display + JetBrains Mono) */
+body.uni-nw {
+  --a-font: "Rajdhani", "Barlow Condensed", system-ui, sans-serif;
+  --n-font: "JetBrains Mono", "Share Tech Mono", ui-monospace, monospace;
+  --n-disp: "Rajdhani", "Orbitron", sans-serif;
+}
+/* universe selector + tagline on the menu */
+.uni-tag { font-family: var(--n-disp, sans-serif); letter-spacing: .22em; text-transform: uppercase; font-size: 13px; color: var(--a-accent); margin: -2px 0 12px; }
+.uniwrap { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
+.uniwrap .difflbl { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--a-muted); }
+#uniSel { display: flex; gap: 8px; flex: 1; }
+#uniSel .uni { flex: 1; display: grid; gap: 1px; text-align: left; background: var(--a-panel); border: 1px solid var(--a-edge); border-radius: 8px; padding: 7px 10px; color: var(--a-muted); cursor: pointer; font-family: var(--a-font); }
+#uniSel .uni b { color: var(--a-text); font-size: 15px; letter-spacing: .04em; }
+#uniSel .uni span { font-size: 11px; color: var(--a-muted); }
+#uniSel .uni.sel { border-color: var(--a-accent); background: rgba(214,194,122,.1); box-shadow: 0 0 0 1px var(--a-accent) inset; }
+body.uni-nw #uniSel .uni.sel { border-color: #40d8e8; background: rgba(64,216,232,.1); box-shadow: 0 0 0 1px #40d8e8 inset; }
+body.uni-nw #uniSel .uni.sel b { color: #cdeff4; }
 html, body { height: 100%; margin: 0; }
 [hidden] { display: none !important; }
 body { background: var(--ink); color: var(--a-text); overflow: hidden; overscroll-behavior: none; -webkit-user-select: none; user-select: none; font-family: var(--a-font); -webkit-tap-highlight-color: transparent; }
@@ -494,7 +511,12 @@ body.theme-cp .bw::after { content: ''; position: absolute; inset: 0; background
 <div class="overlay" id="menu">
   <div class="card">
     <div class="eyebrow">2-player asymmetric co-op · stealth infiltration</div>
-    <h1>CYBER OPS<br><em>COLD ARCHIVE</em></h1>
+    <h1 id="soloTitle">CYBER OPS<br><em>COLD ARCHIVE</em></h1>
+    <div class="uni-tag" id="soloTag">Infiltrate · recover · exfil</div>
+    <div class="uniwrap"><span class="difflbl">Universe</span><div class="diffsel" id="uniSel">
+      <button class="uni" data-uni="nightwatch"><b>NightWatch</b><span>Ra + Rōnin · Warden · SENTINEL</span></button>
+      <button class="uni" data-uni="coldarchive"><b>Cold Archive</b><span>the original cyber-ops skin</span></button>
+    </div></div>
     <p>A whistleblower hid proof of an illegal autonomous-drone program inside the Halden compute campus before they vanished. The evidence sits on a cold archive server, air-gapped behind guards, cameras and patrol drones. One of you goes in on foot. The other rides the network. The agent can't open a door without overwatch; overwatch can't touch the deep network until the agent plants the relays. Every map is generated fresh.</p>
     <div class="grid2">
       <button class="opt" id="mSolo"><b>Single operator</b><span>Play solo. Toggle between both perspectives, or take one role while an AI teammate runs the other.</span></button>

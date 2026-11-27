@@ -87,6 +87,51 @@ function applyOpTheme() {
   document.body.classList.toggle('theme-cp', !!t.fx);   // extra netrunner FX layer
   try { localStorage.setItem('opTheme', opTheme); } catch (e) {}
 }
+// ===================== universe / IP skin: Cold Archive (original) vs NightWatch =====================
+// Both universes share the same code; only the player-facing tokens (callsigns, faction names,
+// branding, palette) differ. NightWatch maps the game onto the canon IP (Ra + Rōnin, Warden, SENTINEL).
+const UNIVERSES = {
+  coldarchive: {
+    name: 'Cold Archive', brand: 'CYBER&nbsp;OPS<em>//</em>CS-7', title: 'CYBER OPS', title2: 'COLD ARCHIVE',
+    tagline: 'Infiltrate · recover · exfil', eyebrow: 'Operation Cold Archive',
+    op: 'Overwatch', callsigns: ['Agent', 'Agent 2'], ai: 'SENTINEL',
+    guardU: 'GUARD', chiefU: 'CHIEF', chief: 'Site Chief',
+    opTheme: 'cp', raBody: null, nwFont: false,
+  },
+  nightwatch: {
+    name: 'NightWatch', brand: 'NIGHT&#8203;WATCH<em>//</em>CA-1', title: 'NIGHTWATCH', title2: 'COLD ARCHIVE',
+    tagline: 'Eyes open. Lights out.', eyebrow: 'Operation Cold Archive · Batch Window',
+    op: 'Rōnin', callsigns: ['Ra', 'Corvid'], ai: 'SENTINEL',
+    guardU: 'WARDEN', chiefU: 'OVERSEER', chief: 'the Overseer',
+    opTheme: 'cp', raBody: '#f2b35b', agent2Body: '#40d8e8', nwFont: true,
+  },
+};
+let universe = 'nightwatch';
+try { const s = localStorage.getItem('universe'); if (s && UNIVERSES[s]) universe = s; } catch (e) {}
+function U() { return UNIVERSES[universe] || UNIVERSES.coldarchive; }
+// the callsign for a field agent by index (0 = primary / Ra, 1 = second / Corvid)
+function agentCallsign(idx) { const c = U().callsigns; return c[idx] || c[0]; }
+// rewrite an authored (Cold Archive) string to the active universe's callsigns + faction names
+function nwText(s) {
+  if (universe !== 'nightwatch' || !s) return s;
+  return s
+    .replace(/OVERWATCH/g, 'RŌNIN').replace(/Overwatch/g, 'Rōnin')
+    .replace(/Site Chief/g, 'Overseer').replace(/\bChief\b/g, 'Overseer').replace(/\bCHIEF\b/g, 'OVERSEER')
+    .replace(/\bGUARDS\b/g, 'WARDENS').replace(/\bGUARD\b/g, 'WARDEN')
+    .replace(/\bguards\b/g, 'wardens').replace(/\bGuards\b/g, 'Wardens')
+    .replace(/\bguard\b/g, 'warden').replace(/\bGuard\b/g, 'Warden');
+}
+function applyUniverse() {
+  const u = U();
+  document.body.classList.toggle('uni-nw', universe === 'nightwatch');
+  const setHTML = (sel, html) => { const e = document.querySelector(sel); if (e) e.innerHTML = html; };
+  setHTML('.n-brand', u.brand);
+  setHTML('#soloTitle', u.title + '<br><em>' + u.title2 + '</em>');
+  setHTML('#soloTag', u.tagline);
+  const eb = document.querySelector('#soloEyebrow'); if (eb) eb.textContent = u.eyebrow;
+  try { document.title = u.title === 'NIGHTWATCH' ? 'NightWatch: Cold Archive' : 'Cyber Ops: Cold Archive'; } catch (e) {}
+  try { localStorage.setItem('universe', universe); } catch (e) {}
+}
 function D() { return DIFF[difficulty] || DIFF.operative; }
 
 // ============================================================= procedural map
@@ -1958,7 +2003,7 @@ function drawAgent() {
   // emps
   for (const e of W.emps) { ctx.strokeStyle = 'rgba(0,229,255,' + e.t + ')'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(e.x, e.y, (0.6 - e.t) * 260 + 10, 0, TAU); ctx.stroke(); }
   // IR laser + agent
-  drawAgentBody(ctx, ag.x, ag.y, ag.aim);
+  drawAgentBody(ctx, ag.x, ag.y, ag.aim, ag);
   // partner marker (coop/both: the other player presence)
   ctx.restore();
   // fog of war
@@ -2026,7 +2071,7 @@ function drawObjSpot() {
 // the OTHER player's agent, drawn as the realistic grounded figure in a teal-green teammate tint
 function drawTeammate(c, a, opView) {
   if (!a || a.dead) return;
-  const z = opView ? W.opCam.z : AGS, down = a.downed, col = down ? '#ff2a6d' : '#39ff9e';
+  const z = opView ? W.opCam.z : AGS, down = a.downed, col = down ? '#ff2a6d' : (U().agent2Body || '#39ff9e');
   // ground shadow
   c.fillStyle = 'rgba(0,0,0,0.38)'; c.beginPath(); c.ellipse(a.x + 3, a.y + 4, 11, 8, 0, 0, TAU); c.fill();
   if (down) {
@@ -2034,28 +2079,91 @@ function drawTeammate(c, a, opView) {
   } else {
     // IR laser (teammate, dim green)
     const ld = ray(a.x, a.y, a.aim, 320, (tx, ty) => { const v = tileAt(tx, ty); return v === WALL || v === RACK || v === FENCE || closedDoor(tx, ty); });
-    c.strokeStyle = 'rgba(57,255,158,0.24)'; c.lineWidth = 1; c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(a.x + Math.cos(a.aim) * ld, a.y + Math.sin(a.aim) * ld); c.stroke();
-    // raised figure (same model as the player, tinted team-green)
-    c.save(); c.translate(a.x, a.y - 3); c.rotate(a.aim);
-    if (a.cloak) c.globalAlpha = 0.5;
-    const body = a.cloak ? '#8fc4d6' : '#2f6b52', bodyLo = a.cloak ? '#5f97ab' : '#1f4a38', head = a.cloak ? '#b6e4f0' : '#245a44';
-    c.fillStyle = '#12161a'; c.fillRect(4, -2, 15, 4);
-    c.fillStyle = '#0c0f12'; c.fillRect(2, -3.5, 5, 7);
-    c.fillStyle = bodyLo; c.beginPath(); c.ellipse(-1, 1.5, 8.5, 10, 0, 0, TAU); c.fill();
-    c.fillStyle = body; c.beginPath(); c.ellipse(0, 0, 8.5, 10, 0, 0, TAU); c.fill();
-    c.fillStyle = bodyLo; c.fillRect(-7, -9, 14, 3);
-    c.fillStyle = head; c.beginPath(); c.arc(3, 0, 4.6, 0, TAU); c.fill();
-    c.fillStyle = 'rgba(180,255,220,0.25)'; c.beginPath(); c.arc(4, -1.5, 1.8, 0, TAU); c.fill();
-    c.restore(); c.globalAlpha = 1;
+    c.strokeStyle = universe === 'nightwatch' ? 'rgba(64,216,232,0.24)' : 'rgba(57,255,158,0.24)'; c.lineWidth = 1; c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(a.x + Math.cos(a.aim) * ld, a.y + Math.sin(a.aim) * ld); c.stroke();
+    if (universe === 'nightwatch') { nwOperator(c, a.x, a.y - 3, a.aim, col, a.cloak); }
+    else {
+      // raised figure (same model as the player, tinted team-green)
+      c.save(); c.translate(a.x, a.y - 3); c.rotate(a.aim);
+      if (a.cloak) c.globalAlpha = 0.5;
+      const body = a.cloak ? '#8fc4d6' : '#2f6b52', bodyLo = a.cloak ? '#5f97ab' : '#1f4a38', head = a.cloak ? '#b6e4f0' : '#245a44';
+      c.fillStyle = '#12161a'; c.fillRect(4, -2, 15, 4);
+      c.fillStyle = '#0c0f12'; c.fillRect(2, -3.5, 5, 7);
+      c.fillStyle = bodyLo; c.beginPath(); c.ellipse(-1, 1.5, 8.5, 10, 0, 0, TAU); c.fill();
+      c.fillStyle = body; c.beginPath(); c.ellipse(0, 0, 8.5, 10, 0, 0, TAU); c.fill();
+      c.fillStyle = bodyLo; c.fillRect(-7, -9, 14, 3);
+      c.fillStyle = head; c.beginPath(); c.arc(3, 0, 4.6, 0, TAU); c.fill();
+      c.fillStyle = 'rgba(180,255,220,0.25)'; c.beginPath(); c.arc(4, -1.5, 1.8, 0, TAU); c.fill();
+      c.restore(); c.globalAlpha = 1;
+    }
   }
   // team ring + label + health
   c.strokeStyle = col; c.lineWidth = opView ? 1.4 / z : 1.4; c.beginPath(); c.arc(a.x, a.y, 13, 0, TAU); c.stroke();
   c.fillStyle = col; c.font = (opView ? 9 / z : 10) + 'px "Barlow Condensed"'; c.textAlign = 'center';
-  c.fillText(down ? 'DOWN' : ('AGENT ' + ((a.idx || 0) + 1)), a.x, a.y - 16); c.textAlign = 'left';
+  c.fillText(down ? 'DOWN' : agentCallsign(a.idx || 0).toUpperCase(), a.x, a.y - 16); c.textAlign = 'left';
   if (a.hp < a.maxHp) { c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(a.x - 11, a.y + 13, 22, 3); c.fillStyle = a.hp < 35 ? '#ff2a6d' : col; c.fillRect(a.x - 11, a.y + 13, 22 * clamp(a.hp / (a.maxHp || 100), 0, 1), 3); }
 }
-function drawAgentBody(c, x, y, a) {
-  const ag = W.ag;
+// ---- NightWatch top-down character art (operator / Warden / SENTINEL drone) ----
+// A NightWatch operator seen from above: Multicam-Black kit, chest rig, poncho shoulders,
+// helmet with a goggle/NVG strip glowing in the team accent, KR-50 forward. Caller passes world x,y + facing.
+function nwOperator(c, x, y, a, accent, cloak) {
+  c.save(); c.translate(x, y); c.rotate(a);
+  const al = cloak ? 0.42 : 1; c.globalAlpha = al;
+  // KR-50 rifle, forward
+  c.fillStyle = '#121314'; c.fillRect(-3, -1.8, 7, 3.6);                         // stock
+  c.fillStyle = '#2a2d31'; c.fillRect(4, -3, 6, 6);                              // receiver + optic
+  c.fillStyle = '#17181b'; c.fillRect(9, -1.3, 13, 2.6);                         // barrel + suppressor
+  // poncho / pack behind the shoulders (urban-digital)
+  c.fillStyle = cloak ? '#5f97ab' : '#33373b'; c.beginPath(); c.ellipse(-3.5, 0, 10.5, 11.8, 0, 0, TAU); c.fill();
+  // Multicam-Black torso
+  c.fillStyle = cloak ? '#8fc4d6' : '#2b2c2e'; c.beginPath(); c.ellipse(0, 0, 8.6, 10, 0, 0, TAU); c.fill();
+  // plate carrier
+  c.fillStyle = cloak ? '#6f9fb0' : '#1a1b1c'; c.beginPath(); c.ellipse(1, 0, 5.6, 7.6, 0, 0, TAU); c.fill();
+  // mag pouches
+  c.fillStyle = cloak ? '#5f97ab' : '#0f1012'; c.fillRect(-2.5, -5, 3, 3.4); c.fillRect(-2.5, 1.6, 3, 3.4);
+  // shoulder straps (FDE) + accent patch (team colour)
+  c.fillStyle = cloak ? '#7fb0c0' : '#5f533e'; c.fillRect(-6.5, -9, 13, 2.4);
+  c.fillStyle = accent; c.fillRect(-4, -1.3, 2.6, 2.6);
+  // head: helmet + goggle/NVG strip glowing in the team accent
+  c.fillStyle = cloak ? '#b6e4f0' : '#20242a'; c.beginPath(); c.arc(3.4, 0, 4.5, 0, TAU); c.fill();
+  c.save(); c.globalCompositeOperation = cloak ? 'source-over' : 'lighter';
+  c.fillStyle = cloak ? '#dff4fa' : accent; c.globalAlpha = al * (cloak ? 1 : 0.85); c.fillRect(5.6, -2.6, 1.7, 5.2); c.restore();
+  c.globalAlpha = 1; c.restore();
+}
+// A Warden guard: grey multicam, black tac vest, a RED VISOR that glows on alert, silenced SMG.
+function nwWarden(c, x, y, a, state, flash, chief) {
+  c.save(); c.translate(x, y); c.rotate(a);
+  c.fillStyle = '#121314'; c.fillRect(3, -1.3, 13, 2.6);                         // SMG
+  c.fillStyle = 'rgba(0,0,0,0.32)'; c.beginPath(); c.ellipse(-0.5, 1.4, 8, 9, 0, 0, TAU); c.fill();
+  c.fillStyle = flash ? '#fff' : '#787d82'; c.beginPath(); c.ellipse(0, 0, 8, 9, 0, 0, TAU); c.fill();   // grey camo torso
+  c.fillStyle = flash ? '#fff' : '#1c1d20'; c.beginPath(); c.ellipse(0.5, 0, 5, 6.6, 0, 0, TAU); c.fill(); // tac vest
+  c.fillStyle = flash ? '#fff' : '#5a5e63'; c.fillRect(-6, -8, 12, 2.3);         // shoulders
+  c.fillStyle = flash ? '#fff' : '#2a2c2f'; c.beginPath(); c.arc(2.8, 0, 4, 0, TAU); c.fill();   // helmet
+  // red visor — the Warden identifier; glows when alert
+  const alert = state === 'alert';
+  if (alert) { c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = 'rgba(255,64,80,0.55)'; c.fillRect(4.2, -2.8, 2.6, 5.6); c.restore(); }
+  c.fillStyle = flash ? '#fff' : (alert ? '#ff6472' : '#ff4050'); c.fillRect(4.7, -2.1, 1.6, 4.2);
+  c.restore();
+  if (chief) { c.fillStyle = '#c070ff'; c.beginPath(); c.arc(x, y - 13, 2.6, 0, TAU); c.fill(); c.strokeStyle = 'rgba(192,112,255,0.7)'; c.lineWidth = 1; c.stroke(); }
+}
+// A SENTINEL patrol drone: X-frame quad with spinning rotor discs, magenta hard-light core, red eye when hunting.
+function nwDrone(c, x, y, spin, state, flash) {
+  const hunt = state === 'hunt', neon = hunt ? '255,58,74' : '255,42,138';
+  c.save(); c.translate(x, y);
+  c.save(); c.rotate(spin);
+  for (let i = 0; i < 4; i++) {
+    const ang = i / 4 * TAU + Math.PI / 4, ex = Math.cos(ang) * 8.5, ey = Math.sin(ang) * 8.5;
+    c.strokeStyle = flash ? '#fff' : '#3a3f48'; c.lineWidth = 2.2; c.beginPath(); c.moveTo(0, 0); c.lineTo(ex, ey); c.stroke();
+    c.strokeStyle = 'rgba(' + neon + ',0.5)'; c.lineWidth = 1; c.beginPath(); c.arc(ex, ey, 3.1, 0, TAU); c.stroke();
+  }
+  c.restore();
+  // body plate + hard-light core
+  c.fillStyle = flash ? '#fff' : '#20242b'; c.beginPath(); c.arc(0, 0, 3.6, 0, TAU); c.fill();
+  c.save(); c.globalCompositeOperation = 'lighter'; c.fillStyle = 'rgba(' + neon + ',0.9)'; c.beginPath(); c.arc(0, 0, 2.2, 0, TAU); c.fill(); c.restore();
+  c.fillStyle = flash ? '#fff' : (hunt ? '#ff3a4a' : '#ff2a8a'); c.beginPath(); c.arc(0, 0, 1.2, 0, TAU); c.fill();
+  c.restore();
+}
+function drawAgentBody(c, x, y, a, agArg) {
+  const ag = agArg || W.ag;
   if (ag.downed) {
     c.fillStyle = 'rgba(0,0,0,0.4)'; c.beginPath(); c.ellipse(x + 2, y + 3, 13, 9, 0, 0, TAU); c.fill();
     c.save(); c.translate(x, y); c.rotate(a + 0.5);
@@ -2081,6 +2189,8 @@ function drawAgentBody(c, x, y, a) {
   c.fillStyle = ag.nv ? '#ff4040' : 'rgba(255,60,60,0.6)'; c.beginPath(); c.arc(x + Math.cos(a) * ld, y + Math.sin(a) * ld, 2, 0, TAU); c.fill();
   // ground shadow
   c.fillStyle = 'rgba(0,0,0,0.38)'; c.beginPath(); c.ellipse(x + 3, y + 4, 11, 8, 0, 0, TAU); c.fill();
+  // NightWatch: the operator model. Cold Archive: the original soldier.
+  if (universe === 'nightwatch') { nwOperator(c, x, y - 3, a, (ag.idx ? (U().agent2Body || '#40d8e8') : (U().raBody || '#f2b35b')), ag.cloak); return; }
   // raised figure (lift toward camera for a standing look)
   c.save(); c.translate(x, y - 3); c.rotate(a);
   if (ag.cloak) c.globalAlpha = 0.42;
@@ -2135,15 +2245,18 @@ function drawGuardWorld(g, opView) {
   }
   if (!opView) { ctxx.fillStyle = 'rgba(0,0,0,0.36)'; ctxx.beginPath(); ctxx.ellipse(g.x + 3, g.y + 4, 10, 7, 0, 0, TAU); ctxx.fill(); }
   const lift = opView ? 0 : 3;
-  ctxx.save(); ctxx.translate(g.x, g.y - lift); ctxx.rotate(g.face);
-  const dark = g.hitFlash > 0 ? '#fff' : col;
-  ctxx.fillStyle = '#12161a'; ctxx.fillRect(4, -1.5, 12, 3);                 // weapon
-  ctxx.fillStyle = 'rgba(0,0,0,0.3)'; ctxx.beginPath(); ctxx.ellipse(-0.5, 1.5, 8, 9, 0, 0, TAU); ctxx.fill();
-  ctxx.fillStyle = dark; ctxx.beginPath(); ctxx.ellipse(0, 0, 8, 9, 0, 0, TAU); ctxx.fill(); // torso
-  if (!opView) { ctxx.fillStyle = 'rgba(0,0,0,0.3)'; ctxx.fillRect(-6, -8, 12, 2.5); }       // shoulders
-  ctxx.fillStyle = g.hitFlash > 0 ? '#fff' : 'rgba(0,0,0,0.45)'; ctxx.beginPath(); ctxx.arc(2.5, 0, 4, 0, TAU); ctxx.fill(); // head
-  ctxx.restore();
-  if (g.chief) { ctxx.fillStyle = '#d6a0ff'; ctxx.beginPath(); ctxx.arc(g.x, g.y - 13, 2.5, 0, TAU); ctxx.fill(); }
+  if (universe === 'nightwatch') { nwWarden(ctxx, g.x, g.y - lift, g.face, g.state, g.hitFlash > 0, g.chief); }
+  else {
+    ctxx.save(); ctxx.translate(g.x, g.y - lift); ctxx.rotate(g.face);
+    const dark = g.hitFlash > 0 ? '#fff' : col;
+    ctxx.fillStyle = '#12161a'; ctxx.fillRect(4, -1.5, 12, 3);                 // weapon
+    ctxx.fillStyle = 'rgba(0,0,0,0.3)'; ctxx.beginPath(); ctxx.ellipse(-0.5, 1.5, 8, 9, 0, 0, TAU); ctxx.fill();
+    ctxx.fillStyle = dark; ctxx.beginPath(); ctxx.ellipse(0, 0, 8, 9, 0, 0, TAU); ctxx.fill(); // torso
+    if (!opView) { ctxx.fillStyle = 'rgba(0,0,0,0.3)'; ctxx.fillRect(-6, -8, 12, 2.5); }       // shoulders
+    ctxx.fillStyle = g.hitFlash > 0 ? '#fff' : 'rgba(0,0,0,0.45)'; ctxx.beginPath(); ctxx.arc(2.5, 0, 4, 0, TAU); ctxx.fill(); // head
+    ctxx.restore();
+    if (g.chief) { ctxx.fillStyle = '#d6a0ff'; ctxx.beginPath(); ctxx.arc(g.x, g.y - 13, 2.5, 0, TAU); ctxx.fill(); }
+  }
   if ((W.marks.includes(g.id) || g.markT > 0) && !opView) { ctxx.strokeStyle = '#ff2a6d'; ctxx.lineWidth = 1.5; ctxx.strokeRect(g.x - 11, g.y - 11, 22, 22); }
   // awareness pip
   if (g.aw > 0.1 && g.state !== 'alert') { ctxx.fillStyle = 'rgba(245,211,0,' + g.aw + ')'; ctxx.fillRect(g.x - 6, g.y - 15, 12 * g.aw, 2); }
@@ -2155,10 +2268,13 @@ function drawDroneWorld(dr, opView) {
   const col = dr.empT > 0 ? '#556' : dr.state === 'hunt' ? '#e0664f' : '#00e5ff';
   if (!opView && !agentDirectSee(dr)) { if (W.ow.scanT > 0) { drawContactIcon(ctxx, dr.x, dr.y, dr.scanA, false); return; } ctxx.save(); ctxx.globalAlpha = 0.5; ctxx.strokeStyle = col; ctxx.lineWidth = 2; for (let i = 0; i < 4; i++) { const a = i / 4 * TAU + W.t * 5; ctxx.beginPath(); ctxx.moveTo(dr.x, dr.y); ctxx.lineTo(dr.x + Math.cos(a) * 7, dr.y + Math.sin(a) * 7); ctxx.stroke(); } ctxx.globalAlpha = 1; ctxx.strokeStyle = '#ff2a6d'; ctxx.lineWidth = 1.5; ctxx.strokeRect(dr.x - 10, dr.y - 10, 20, 20); ctxx.restore(); return; }
   if (dr.empT <= 0) { const far = 180, half = 0.45; const grd = ctxx.createRadialGradient(dr.x, dr.y, 4, dr.x, dr.y, far); grd.addColorStop(0, dr.state === 'hunt' ? 'rgba(224,102,79,0.14)' : 'rgba(0,229,255,0.08)'); grd.addColorStop(1, 'rgba(0,0,0,0)'); ctxx.fillStyle = grd; ctxx.beginPath(); ctxx.moveTo(dr.x, dr.y); for (let i = -half; i <= half; i += 0.15) { const d = ray(dr.x, dr.y, dr.scanA + i, far, (tx, ty) => { const v = tileAt(tx, ty); return v === WALL || v === RACK || closedDoor(tx, ty); }); ctxx.lineTo(dr.x + Math.cos(dr.scanA + i) * d, dr.y + Math.sin(dr.scanA + i) * d); } ctxx.closePath(); ctxx.fill(); }
-  ctxx.save(); ctxx.translate(dr.x, dr.y); ctxx.rotate(W.t * 6);
-  ctxx.strokeStyle = dr.hitFlash > 0 ? '#fff' : col; ctxx.lineWidth = 2; for (let i = 0; i < 4; i++) { const a = i / 4 * TAU; ctxx.beginPath(); ctxx.moveTo(0, 0); ctxx.lineTo(Math.cos(a) * 7, Math.sin(a) * 7); ctxx.stroke(); ctxx.beginPath(); ctxx.arc(Math.cos(a) * 7, Math.sin(a) * 7, 2.5, 0, TAU); ctxx.stroke(); }
-  ctxx.restore();
-  ctxx.fillStyle = col; ctxx.beginPath(); ctxx.arc(dr.x, dr.y, 2, 0, TAU); ctxx.fill();
+  if (universe === 'nightwatch') { nwDrone(ctxx, dr.x, dr.y, W.t * 6, dr.empT > 0 ? 'emp' : dr.state, dr.hitFlash > 0); }
+  else {
+    ctxx.save(); ctxx.translate(dr.x, dr.y); ctxx.rotate(W.t * 6);
+    ctxx.strokeStyle = dr.hitFlash > 0 ? '#fff' : col; ctxx.lineWidth = 2; for (let i = 0; i < 4; i++) { const a = i / 4 * TAU; ctxx.beginPath(); ctxx.moveTo(0, 0); ctxx.lineTo(Math.cos(a) * 7, Math.sin(a) * 7); ctxx.stroke(); ctxx.beginPath(); ctxx.arc(Math.cos(a) * 7, Math.sin(a) * 7, 2.5, 0, TAU); ctxx.stroke(); }
+    ctxx.restore();
+    ctxx.fillStyle = col; ctxx.beginPath(); ctxx.arc(dr.x, dr.y, 2, 0, TAU); ctxx.fill();
+  }
   if (!opView && (dr.markT > 0 || W.ow.scanT > 0)) { ctxx.strokeStyle = '#ff2a6d'; ctxx.lineWidth = 1.5; ctxx.strokeRect(dr.x - 10, dr.y - 10, 20, 20); }
 }
 function drawAllyWorld(a, opView) {
@@ -2312,7 +2428,7 @@ function drawOp() {
   // guards & drones (all visible to overwatch on tapped network; untapped zones dimmer)
   for (const g of W.guards) drawOpContact(g);
   // versus: highlight the warden's selected guard + its move order
-  if ((soloMode === 'versus' || facRender) && W.def.sel && !W.def.sel.dead) { const s = W.def.sel, go = s.defGo || s.target; ctx.strokeStyle = '#ff2a6d'; ctx.lineWidth = 2 / C.z; ctx.beginPath(); ctx.arc(s.x, s.y, 14, 0, TAU); ctx.stroke(); octText(isDrone(s) ? 'DRONE' : 'GUARD', s.x, s.y - 18, '#ff2a6d', 9); if (go) { ctx.setLineDash([4 / C.z, 3 / C.z]); ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(go.x, go.y); ctx.stroke(); ctx.setLineDash([]); ctx.strokeStyle = '#ff2a6d'; ctx.beginPath(); ctx.arc(go.x, go.y, 5, 0, TAU); ctx.stroke(); } }
+  if ((soloMode === 'versus' || facRender) && W.def.sel && !W.def.sel.dead) { const s = W.def.sel, go = s.defGo || s.target; ctx.strokeStyle = '#ff2a6d'; ctx.lineWidth = 2 / C.z; ctx.beginPath(); ctx.arc(s.x, s.y, 14, 0, TAU); ctx.stroke(); octText(isDrone(s) ? 'DRONE' : nwText('GUARD'), s.x, s.y - 18, '#ff2a6d', 9); if (go) { ctx.setLineDash([4 / C.z, 3 / C.z]); ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(go.x, go.y); ctx.stroke(); ctx.setLineDash([]); ctx.strokeStyle = '#ff2a6d'; ctx.beginPath(); ctx.arc(go.x, go.y, 5, 0, TAU); ctx.stroke(); } }
   for (const dr of W.drones) drawOpDrone(dr);
   for (const a of W.allies) drawAllyWorld(a, true);
   drawLKPWorld(true);
@@ -2357,7 +2473,7 @@ function drawOpContact(g) {
   // cone
   const far = 210, half = 0.5; const grd = octx.createRadialGradient(g.x, g.y, 4, g.x, g.y, far); grd.addColorStop(0, g.state === 'alert' ? 'rgba(255,42,109,0.16)' : 'rgba(90,208,255,0.08)'); grd.addColorStop(1, 'rgba(0,0,0,0)'); octx.fillStyle = grd; octx.beginPath(); octx.moveTo(g.x, g.y); for (let i = -half; i <= half; i += 0.14) { const d = ray(g.x, g.y, g.face + i, far, (tx, ty) => opaqueAt(tx, ty)); octx.lineTo(g.x + Math.cos(g.face + i) * d, g.y + Math.sin(g.face + i) * d); } octx.closePath(); octx.fill();
   octx.save(); octx.translate(g.x, g.y); octx.rotate(g.face); octx.fillStyle = col; octx.beginPath(); octx.moveTo(8, 0); octx.lineTo(-5, -5); octx.lineTo(-5, 5); octx.closePath(); octx.fill(); octx.restore();
-  if (g.chief) octText('CHIEF', g.x, g.y - 12, '#d6a0ff', 8);
+  if (g.chief) octText(U().chiefU, g.x, g.y - 12, '#d6a0ff', 8);
   if (W.marks.includes(g.id) || g.markT > 0) { octx.strokeStyle = '#ff2a6d'; octx.lineWidth = 1.5 / C.z; octx.strokeRect(g.x - 9, g.y - 9, 18, 18); }
 }
 function drawOpDrone(dr) {
@@ -2381,7 +2497,7 @@ function drawOpAgent() {
     octx.strokeStyle = '#d6c27a'; octx.lineWidth = 2 / C.z; octx.beginPath(); octx.arc(0, 0, 9, 0, TAU); octx.stroke();
     octx.fillStyle = ag.cloak ? '#8fc4d6' : '#d6c27a'; octx.rotate(ag.aim); octx.beginPath(); octx.moveTo(9, 0); octx.lineTo(0, -4); octx.lineTo(0, 4); octx.closePath(); octx.fill();
     octx.restore();
-    octText(twoAgents() ? ('AGENT ' + ((ag.idx || 0) + 1)) : 'AGENT', ag.x, ag.y - 14, ag.downed ? '#ff2a6d' : '#d6c27a', 9);
+    octText((twoAgents() ? agentCallsign(ag.idx || 0) : agentCallsign(0)).toUpperCase(), ag.x, ag.y - 14, ag.downed ? '#ff2a6d' : (ag.idx ? (U().agent2Body || '#d6c27a') : (U().raBody || '#d6c27a')), 9);
     if (ag.hp < ag.maxHp) { octx.fillStyle = 'rgba(0,0,0,0.6)'; octx.fillRect(ag.x - 12, ag.y + 12, 24, 3); octx.fillStyle = ag.hp < 35 ? '#ff2a6d' : '#39ff9e'; octx.fillRect(ag.x - 12, ag.y + 12, 24 * clamp(ag.hp / (ag.maxHp || 100), 0, 1), 3); }
   }
 }
@@ -2558,8 +2674,8 @@ let hudCache = {};
 function setTx(el, v) { if (hudCache[el] !== v) { hudCache[el] = v; const e = $(el); if (e) e.textContent = v; } }
 function renderObjective() {
   const o = OBJ[W.obj.step] || OBJ[0];
-  setTx('aStep', 'Objective ' + (W.obj.step + 1) + ' / 8'); setTx('aObj', o.t); setTx('aObjSub', o.s);
-  const no = $('nObj'); if (no) no.innerHTML = '<b>OBJ ' + (W.obj.step + 1) + '/8</b>' + esc(o.t);
+  setTx('aStep', 'Objective ' + (W.obj.step + 1) + ' / 8'); setTx('aObj', nwText(o.t)); setTx('aObjSub', nwText(o.s));
+  const no = $('nObj'); if (no) no.innerHTML = '<b>OBJ ' + (W.obj.step + 1) + '/8</b>' + esc(nwText(o.t));
 }
 function updateHud() {
   if (view === 'agent') updateAgentHud(); else updateOpHud();
@@ -2575,7 +2691,7 @@ function updateAgentHud() {
   const link = $('aLink'); const online = humanDrivesOp() ? false : true; const coopLink = net.mode !== 'solo' ? !!net.partner : true;
   const on = (net.mode === 'solo') ? (soloMode !== 'practice') : coopLink;
   link.classList.toggle('on', on); link.firstChild.nextSibling ? 0 : 0;
-  link.innerHTML = '<i></i>' + (soloMode === 'practice' ? 'Range' : on ? 'Overwatch linked' : 'Overwatch offline');
+  link.innerHTML = '<i></i>' + nwText(soloMode === 'practice' ? 'Range' : on ? 'Overwatch linked' : 'Overwatch offline');
   // banner for alarm/lockdown
   const ban = $('aBanner');
   if (W.obj.lockdown) { ban.hidden = false; ban.className = 'a-banner'; ban.textContent = 'LOCKDOWN — EXFIL'; }
@@ -2675,17 +2791,17 @@ function renderComms() {
   const el = $('comms'); if (!el) return;
   const last = W.comms.slice(-9);
   const sig = last.map(c => c.text).join('|'); if (sig === commsSig) return; commsSig = sig;
-  el.innerHTML = last.map(c => '<div class="' + c.kind + '">' + (c.kind === 'req' ? '▲ ' : c.kind === 'me' ? '› ' : c.kind === 'ag' ? '◆ ' : '· ') + esc(c.text) + '</div>').join('');
+  el.innerHTML = last.map(c => '<div class="' + c.kind + '">' + (c.kind === 'req' ? '▲ ' : c.kind === 'me' ? '› ' : c.kind === 'ag' ? '◆ ' : '· ') + esc(nwText(c.text)) + '</div>').join('');
 }
 function renderAgentMsgs() {
   const el = $('aMsgs'); if (!el) return;
-  const html = () => agentMsgs.slice(-2).map(m => '<div class="a-msg' + (m.tag === 'YOU' ? ' me' : '') + '"><em>' + m.tag + '</em>' + esc(m.text) + '</div>').join('');
+  const html = () => agentMsgs.slice(-2).map(m => '<div class="a-msg' + (m.tag === 'YOU' ? ' me' : '') + '"><em>' + esc(nwText(m.tag)) + '</em>' + esc(nwText(m.text)) + '</div>').join('');
   el.innerHTML = html();
   setTimeout(() => { agentMsgs = agentMsgs.filter(m => now() - m.t < 6000); if (el) el.innerHTML = html(); }, 6100);
 }
 let aToastT = 0;
-function aToastShow(txt, cls) { const t = $('aToast'); t.textContent = txt; t.className = 'a-toast show'; clearTimeout(aToastShow._t); aToastShow._t = setTimeout(() => t.className = 'a-toast', 1600); }
-function nToastShow(txt) { const t = $('nToast'); t.textContent = txt; t.className = 'n-toast show'; clearTimeout(nToastShow._t); nToastShow._t = setTimeout(() => t.className = 'n-toast', 1500); }
+function aToastShow(txt, cls) { const t = $('aToast'); t.textContent = nwText(txt); t.className = 'a-toast show'; clearTimeout(aToastShow._t); aToastShow._t = setTimeout(() => t.className = 'a-toast', 1600); }
+function nToastShow(txt) { const t = $('nToast'); t.textContent = nwText(txt); t.className = 'n-toast show'; clearTimeout(nToastShow._t); nToastShow._t = setTimeout(() => t.className = 'n-toast', 1500); }
 
 // ============================================================= view switching
 function setView(v) {
@@ -2856,7 +2972,7 @@ function drawOpStrip(i, ox, oy, w, h, flip, tag) {
   const accent = fac ? '#ff2a6d' : nHex();
   // top banner: tag + resource
   ctx.textAlign = 'left'; ctx.fillStyle = accent; ctx.font = '700 12px var(--n-font, monospace)';
-  ctx.fillText(tag + (fac ? ' · FACILITY' : halfView[i] === 'op' ? ' · OVERWATCH' : ''), 12, 20);
+  ctx.fillText(tag + (fac ? ' · SENTINEL' : halfView[i] === 'op' ? ' · ' + U().op.toUpperCase() : ''), 12, 20);
   if (fac) { ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(12, 26, 120, 6); ctx.fillStyle = accent; ctx.fillRect(12, 26, 120 * clamp(W.def.power / 100, 0, 1), 6); ctx.fillStyle = accent; ctx.font = '700 10px var(--n-font, monospace)'; ctx.fillText('PWR ' + Math.round(W.def.power), 138, 33); }
   else { const o = W.ow; ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(12, 26, 120, 6); ctx.fillStyle = owOffline() ? '#ff2a6d' : accent; ctx.fillRect(12, 26, 120 * clamp(o.bw / 100, 0, 1), 6); ctx.fillStyle = accent; ctx.font = '700 10px var(--n-font, monospace)'; ctx.fillText(owOffline() ? 'OFFLINE' : 'BW ' + Math.round(o.bw), 138, 33); }
   // buttons
@@ -3276,6 +3392,13 @@ function renderKit(elId) {
   el.querySelectorAll('button').forEach(b => b.onclick = () => { initAudio(); agentKit = b.dataset.k; renderKit(elId); });
 }
 // operator console theme swatches
+function wireUniverse() {
+  applyUniverse();
+  const el = $('uniSel'); if (!el) return;
+  const mark = () => el.querySelectorAll('.uni').forEach(b => b.classList.toggle('sel', b.dataset.uni === universe));
+  el.querySelectorAll('.uni').forEach(b => b.onclick = () => { initAudio(); universe = b.dataset.uni; applyUniverse(); applyOpTheme(); mark(); });
+  mark();
+}
 function renderThemeSel() {
   const el = $('themeSel'); if (!el) return;
   el.innerHTML = Object.keys(OP_THEMES).map(k => { const t = OP_THEMES[k]; return '<button data-th="' + k + '" class="' + (opTheme === k ? 'on' : '') + '" style="color:' + t.hex + '"><span class="sw" style="background:' + t.hex + '"></span><span>' + t.name + '</span></button>'; }).join('');
@@ -3349,7 +3472,7 @@ function wireReqPanelDrag() {
 }
 function boot() {
   document.body.classList.add('view-agent');
-  resize(); syncFog(); wireMenu(); wireTouchControls(); wireReqPanelDrag(); applyOpTheme();
+  resize(); syncFog(); wireMenu(); wireTouchControls(); wireReqPanelDrag(); applyOpTheme(); wireUniverse();
   cv.addEventListener('touchstart', opTouchStart, { passive: false });
   cv.addEventListener('touchmove', opTouchMove, { passive: false });
   cv.addEventListener('touchend', opTouchEnd); cv.addEventListener('touchcancel', opTouchEnd);
@@ -3372,6 +3495,11 @@ function boot() {
   window.__splitTapHalf = (half, sx, sy) => { const w = opHalfScreenToWorld(half, sx, sy); return { x: Math.round(w.x), y: Math.round(w.y) }; };
   window.__splitSwap = (half) => { halfView[half] = halfView[half] === 'agent' ? 'op' : 'agent'; return halfView.slice(); };
   window.__owSel = () => owSelect;
+  window.__nw = (s) => nwText(s);
+  window.__zoomAgs = (z) => { AGS = z; return AGS; };
+  window.__peek = () => { if (!W) return null; const g = W.guards.find(x => !x.dead); const dr = W.drones.find(x => !x.dead); if (g) { W.ag.x = g.x - 40; W.ag.y = g.y; W.ag.aim = 0; W.marks.push(g.id); g.markT = 30; if (dr) { dr.x = g.x + 20; dr.y = g.y - 36; dr.markT = 30; } W.cam.x = g.x; W.cam.y = g.y; } return g ? { x: Math.round(g.x), y: Math.round(g.y) } : null; };
+  window.__uni = () => universe;
+  window.__fireOw = (id) => { try { owFire(id, W.ag.x + 20, W.ag.y); return 'ok'; } catch (e) { return e.message; } };
   window.__toStep7 = () => { if (!W) return null; W.ag.drive = true; W.obj.step = 7; W.obj.lockdown = true; triggerLockdown(); const d = W.dockDoorRef; return d ? { sealed: d.sealed, open: d.open, type: d.type, x: Math.round(d.x), y: Math.round(d.y) } : 'no-dock'; };
   window.__dockState = () => { if (!W || !W.dockDoorRef) return null; const d = W.dockDoorRef; return { sealed: d.sealed, open: !!d.open, hacked: !!d.hacked, openT: Math.round(d.openT || 0) }; };
   window.__owHackDock = () => { if (!W || !W.dockDoorRef) return null; owHackDoor(W.dockDoorRef); return W.ow.casts.map(c => c.id); };
